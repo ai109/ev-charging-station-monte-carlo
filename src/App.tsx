@@ -4,7 +4,10 @@ import type {
   StationParams,
   WorkerResponse,
 } from "./sim/types";
+import { Controls, type ControlsValue } from "./components/Controls";
+import { KpiCards } from "./components/KpiCards";
 import { Charts } from "./components/Charts";
+import { ReportPanel } from "./components/ReportPanel";
 
 export default function App() {
   const workerRef = useRef<Worker | null>(null);
@@ -15,7 +18,17 @@ export default function App() {
   const [best, setBest] = useState<GridPointResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // ✅ Default params (можеш да ги изнесеш после в Controls.tsx)
+  const [controls, setControls] = useState<ControlsValue>({
+    nGrid: { nMin: 1, nMax: 8 },
+    pGrid: { pMin: 0.45, pMax: 0.85, pStep: 0.05 },
+    mcRuns: 120,
+    seed: 12345,
+    maxDropRateEnabled: true,
+    maxDropRate: 0.12,
+    maxP95Enabled: true,
+    maxP95WaitMin: 12,
+  });
+
   const params: StationParams = useMemo(
     () => ({
       powerKw: 100,
@@ -61,7 +74,7 @@ export default function App() {
       const msg = ev.data;
 
       if (msg.type === "progress" && msg.progress) {
-        setProgressText(`${msg.progress.message}`);
+        setProgressText(msg.progress.message ?? "");
         setRunning(msg.progress.stage === "running");
       }
 
@@ -95,52 +108,48 @@ export default function App() {
       type: "run-grid",
       params,
       config: {
-        nGrid: { nMin: 1, nMax: 8 },
-        pGrid: { pMin: 0.45, pMax: 0.85, pStep: 0.05 },
-        mcRuns: 120,
-        seed: 12345,
-
-        // Constraints (по желание)
-        maxDropRate: 0.12,
-        maxP95WaitMin: 12,
+        nGrid: controls.nGrid,
+        pGrid: controls.pGrid,
+        mcRuns: controls.mcRuns,
+        seed: controls.seed,
+        maxDropRate: controls.maxDropRateEnabled
+          ? controls.maxDropRate
+          : undefined,
+        maxP95WaitMin: controls.maxP95Enabled
+          ? controls.maxP95WaitMin
+          : undefined,
       },
     });
   };
 
   return (
-    <div className="min-h-screen p-6">
-      <div className="max-w-7xl mx-auto space-y-4">
-        <h1 className="text-2xl font-bold">EV Charging Monte Carlo</h1>
-
-        <button
-          className="px-4 py-2 rounded bg-black text-white disabled:opacity-50"
-          onClick={run}
-          disabled={running}
-        >
-          {running ? "Running..." : "Run simulation"}
-        </button>
-
-        <div className="text-sm opacity-80">{progressText}</div>
-
-        {error && (
-          <div className="p-3 rounded bg-red-100 text-red-800">{error}</div>
-        )}
-
-        {best && (
-          <div className="p-4 rounded border">
-            <div className="font-semibold">Best under constraints</div>
-            <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
-              <div>N: {best.N}</div>
-              <div>p: {best.p.toFixed(2)} €/kWh</div>
-              <div>Profit: {best.mean.profit.toFixed(0)} €</div>
-              <div>DropRate: {(best.dropRate * 100).toFixed(1)}%</div>
-              <div>P95 wait: {best.mean.p95WaitMin.toFixed(1)} min</div>
-              <div>
-                Utilization: {(best.mean.utilization * 100).toFixed(1)}%
-              </div>
+    <div className="min-h-screen bg-gray-50 p-6 text-gray-900">
+      <div className="max-w-7xl mx-auto space-y-6">
+        <header className="flex items-end justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold">EV Charging Monte Carlo</h1>
+            <div className="text-sm opacity-70">
+              Grid search over (N, price) • Seasonality + stochastic arrivals +
+              queueing
             </div>
           </div>
+          <div className="text-sm opacity-70">{progressText}</div>
+        </header>
+
+        <Controls
+          value={controls}
+          onChange={setControls}
+          onRun={run}
+          running={running}
+        />
+
+        {error && (
+          <div className="rounded-lg bg-red-100 text-red-800 p-3">{error}</div>
         )}
+
+        <KpiCards best={best} />
+
+        <ReportPanel params={params} best={best} results={results} />
 
         {results && <Charts results={results} />}
       </div>
