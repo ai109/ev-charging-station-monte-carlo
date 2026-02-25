@@ -1,73 +1,81 @@
-# React + TypeScript + Vite
+# EV Charging Station – Monte Carlo Simulation
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A web-based Monte Carlo simulation for analyzing and optimizing the operation of a small EV charging station.
 
-Currently, two official plugins are available:
+The application evaluates different combinations of:
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- Number of charging stalls (N)
+- Price per kWh (p)
 
-## React Compiler
+and determines the configuration that maximizes annual profit under optional service quality constraints.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+---
 
-## Expanding the ESLint configuration
+## Overview
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+This project models the yearly operation of an EV charging station using stochastic simulation.
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+The model includes:
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+- Seasonal demand variation (monthly changes)
+- Temperature-dependent arrival rates
+- Stochastic vehicle arrivals (Poisson process)
+- Random energy consumption per charging session
+- Limited charging capacity and queue formation
+- Customer abandonment due to long waiting times
+- Fixed and variable operational costs
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+For each (N, p) combination, multiple Monte Carlo runs are executed to estimate expected performance metrics.
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+---
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## Optimization Problem
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+The objective is:
+
+\[
+\max\_{N,p} \mathbb{E}[\text{Profit}(N,p)]
+\]
+
+Subject to optional constraints:
+
+- Maximum drop rate
+- Maximum 95th percentile waiting time
+
+A grid search is performed over user-defined ranges for N and p.
+
+---
+
+## Outputs
+
+The application provides:
+
+- Profit heatmap (N vs. p)
+- Drop rate heatmap
+- Pareto chart (Profit vs. Drop Rate)
+- KPI summary for the optimal configuration
+- Export of full grid results (CSV / JSON)
+- Auto-generated summary for reporting
+
+---
+
+## Technology Stack
+
+- React
+- TypeScript
+- Vite
+- TailwindCSS
+- Apache ECharts
+- Web Workers (for non-blocking simulation)
+
+---
+
+## Running the Project
+
+Install dependencies:
+
+```bash
+npm install
+
+npm run dev
 ```
