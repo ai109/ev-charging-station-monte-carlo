@@ -19,7 +19,6 @@ function kpiZero(): SimRunKPIs {
     served: 0,
     droppedQueueFull: 0,
     droppedWaitTol: 0,
-    droppedPrice: 0,
 
     avgWaitMin: 0,
     p95WaitMin: 0,
@@ -39,7 +38,6 @@ function addKpi(a: SimRunKPIs, b: SimRunKPIs): SimRunKPIs {
     served: a.served + b.served,
     droppedQueueFull: a.droppedQueueFull + b.droppedQueueFull,
     droppedWaitTol: a.droppedWaitTol + b.droppedWaitTol,
-    droppedPrice: a.droppedPrice + b.droppedPrice,
 
     // For waits/util we’ll average later across runs
     avgWaitMin: a.avgWaitMin + b.avgWaitMin,
@@ -60,7 +58,6 @@ function scaleKpi(a: SimRunKPIs, s: number): SimRunKPIs {
     served: a.served * s,
     droppedQueueFull: a.droppedQueueFull * s,
     droppedWaitTol: a.droppedWaitTol * s,
-    droppedPrice: a.droppedPrice * s,
 
     avgWaitMin: a.avgWaitMin * s,
     p95WaitMin: a.p95WaitMin * s,
@@ -93,14 +90,133 @@ function* priceGrid(
   }
 }
 
+function validateConfig(config: GridSearchConfig): void {
+  const { nGrid, pGrid, mcRuns, maxDropRate, maxP95WaitMin } = config;
+
+  if (!Number.isFinite(nGrid.nMin) || !Number.isFinite(nGrid.nMax)) {
+    throw new Error("N grid bounds must be finite numbers.");
+  }
+  if (!Number.isFinite(pGrid.pMin) || !Number.isFinite(pGrid.pMax)) {
+    throw new Error("Price grid bounds must be finite numbers.");
+  }
+  if (!Number.isFinite(pGrid.pStep) || pGrid.pStep <= 0) {
+    throw new Error("Price step must be > 0.");
+  }
+  if (pGrid.pMin <= 0 || pGrid.pMax <= 0) {
+    throw new Error("Price grid bounds must be strictly positive.");
+  }
+  if (nGrid.nMin < 1 || nGrid.nMax < 1) {
+    throw new Error("N grid bounds must be >= 1.");
+  }
+  if (nGrid.nMin > nGrid.nMax) {
+    throw new Error("N min cannot be greater than N max.");
+  }
+  if (pGrid.pMin > pGrid.pMax) {
+    throw new Error("Price min cannot be greater than price max.");
+  }
+  if (!Number.isFinite(mcRuns) || mcRuns < 1) {
+    throw new Error("Monte Carlo runs must be >= 1.");
+  }
+  if (maxDropRate !== undefined && (maxDropRate < 0 || maxDropRate > 1)) {
+    throw new Error("maxDropRate must be in [0, 1].");
+  }
+  if (maxP95WaitMin !== undefined && maxP95WaitMin < 0) {
+    throw new Error("maxP95WaitMin must be >= 0.");
+  }
+}
+
+function validateStationParams(params: StationParams): void {
+  if (!Number.isFinite(params.pRef) || params.pRef <= 0) {
+    throw new Error("pRef must be strictly positive.");
+  }
+  if (
+    !Number.isFinite(params.priceElasticity) ||
+    params.priceElasticity <= 0
+  ) {
+    throw new Error("priceElasticity must be strictly positive.");
+  }
+  if (params.baseArrivalsPerHourByMonth.length < 12) {
+    throw new Error("baseArrivalsPerHourByMonth must provide 12 months.");
+  }
+  if (params.avgTempCByMonth.length < 12) {
+    throw new Error("avgTempCByMonth must provide 12 months.");
+  }
+  if (!Number.isFinite(params.powerKw) || params.powerKw <= 0) {
+    throw new Error("powerKw must be strictly positive.");
+  }
+  if (!Number.isFinite(params.qMax) || params.qMax < 0) {
+    throw new Error("qMax must be >= 0.");
+  }
+  if (!Number.isFinite(params.openHours) || params.openHours < 1 || params.openHours > 24) {
+    throw new Error("openHours must be in [1, 24].");
+  }
+  if (!Number.isFinite(params.gridCostPerKwh) || params.gridCostPerKwh < 0) {
+    throw new Error("gridCostPerKwh must be >= 0.");
+  }
+  if (!Number.isFinite(params.fixedCostPerYear) || params.fixedCostPerYear < 0) {
+    throw new Error("fixedCostPerYear must be >= 0.");
+  }
+  if (
+    !Number.isFinite(params.fixedCostPerStallPerYear) ||
+    params.fixedCostPerStallPerYear < 0
+  ) {
+    throw new Error("fixedCostPerStallPerYear must be >= 0.");
+  }
+  if (!Number.isFinite(params.energyKwhStd) || params.energyKwhStd < 0) {
+    throw new Error("energyKwhStd must be >= 0.");
+  }
+  if (!Number.isFinite(params.energyKwhMin) || params.energyKwhMin < 0) {
+    throw new Error("energyKwhMin must be >= 0.");
+  }
+  if (!Number.isFinite(params.energyKwhMax) || params.energyKwhMax <= 0) {
+    throw new Error("energyKwhMax must be > 0.");
+  }
+  if (
+    params.energyKwhMin > params.energyKwhMean ||
+    params.energyKwhMean > params.energyKwhMax
+  ) {
+    throw new Error("Energy bounds must satisfy min <= mean <= max.");
+  }
+  if (!Number.isFinite(params.waitTolStdMin) || params.waitTolStdMin < 0) {
+    throw new Error("waitTolStdMin must be >= 0.");
+  }
+  if (!Number.isFinite(params.waitTolMin) || params.waitTolMin < 0) {
+    throw new Error("waitTolMin must be >= 0.");
+  }
+  if (!Number.isFinite(params.waitTolMax) || params.waitTolMax <= 0) {
+    throw new Error("waitTolMax must be > 0.");
+  }
+  if (
+    params.waitTolMin > params.waitTolMeanMin ||
+    params.waitTolMeanMin > params.waitTolMax
+  ) {
+    throw new Error("Wait tolerance bounds must satisfy min <= mean <= max.");
+  }
+
+  for (let month = 0; month < 12; month++) {
+    const base = params.baseArrivalsPerHourByMonth[month];
+    if (!Number.isFinite(base) || base <= 0) {
+      throw new Error(
+        `baseArrivalsPerHourByMonth[${month}] must be strictly positive.`,
+      );
+    }
+  }
+}
+
 export function gridSearch(
   params: StationParams,
   config: GridSearchConfig,
   onProgress?: (completed: number, total: number) => void,
 ): { results: GridPointResult[]; best: GridPointResult | null } {
+  validateConfig(config);
+  validateStationParams(params);
+
   const { nGrid, pGrid, mcRuns, seed, maxDropRate, maxP95WaitMin } = config;
 
   const pValues = Array.from(priceGrid(pGrid.pMin, pGrid.pMax, pGrid.pStep));
+  if (pValues.length === 0) {
+    throw new Error("Price grid produced zero points.");
+  }
   const total = (nGrid.nMax - nGrid.nMin + 1) * pValues.length;
 
   const results: GridPointResult[] = [];
@@ -116,7 +232,6 @@ export function gridSearch(
 
       const profits: number[] = [];
       const dropRates: number[] = [];
-      const p95Waits: number[] = [];
 
       let sum = kpiZero();
 
@@ -128,16 +243,15 @@ export function gridSearch(
 
         profits.push(kpi.profit);
 
-        const dropped =
-          kpi.droppedPrice + kpi.droppedQueueFull + kpi.droppedWaitTol;
+        const dropped = kpi.droppedQueueFull + kpi.droppedWaitTol;
         const dr = kpi.arrivals > 0 ? dropped / kpi.arrivals : 0;
         dropRates.push(dr);
-
-        p95Waits.push(kpi.p95WaitMin);
       }
 
       // Mean KPIs across runs
       const meanKpi = scaleKpi(sum, 1 / mcRuns);
+      const meanDropped = meanKpi.droppedQueueFull + meanKpi.droppedWaitTol;
+      const dropRate = meanKpi.arrivals > 0 ? meanDropped / meanKpi.arrivals : 0;
 
       // For waits & utilization, averaging across runs is OK for display,
       // though you could later compute pooled percentiles from all waits if you store them.
@@ -147,7 +261,7 @@ export function gridSearch(
         mean: meanKpi,
         stderrProfit: stdErr(profits),
         stderrDropRate: stdErr(dropRates),
-        dropRate: mean(dropRates),
+        dropRate,
       };
 
       results.push(point);
@@ -156,7 +270,9 @@ export function gridSearch(
       const okDrop =
         maxDropRate === undefined ? true : point.dropRate <= maxDropRate;
       const okWait =
-        maxP95WaitMin === undefined ? true : mean(p95Waits) <= maxP95WaitMin;
+        maxP95WaitMin === undefined
+          ? true
+          : point.mean.p95WaitMin <= maxP95WaitMin;
 
       if (okDrop && okWait) {
         if (!best || point.mean.profit > best.mean.profit) best = point;

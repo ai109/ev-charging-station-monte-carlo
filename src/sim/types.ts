@@ -30,9 +30,7 @@ export interface StationParams {
 
   // Price-demand model
   pRef: number; // reference price
-  priceSensitivity: number; // alpha for linear model
-  minDemandFactor: number; // clamp lower
-  maxDemandFactor: number; // clamp upper
+  priceElasticity: number; // constant elasticity epsilon in lambda(p)=lambda0*(p/pRef)^(-epsilon)
 
   // Energy demand distribution (kWh per session)
   energyKwhMean: number;
@@ -58,7 +56,6 @@ export interface SimRunKPIs {
   served: number;
   droppedQueueFull: number;
   droppedWaitTol: number;
-  droppedPrice: number;
 
   avgWaitMin: number; // mean wait among served
   p95WaitMin: number; // 95th percentile wait among served

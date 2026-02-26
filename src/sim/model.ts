@@ -7,10 +7,9 @@ export function demandFactorFromPrice(
   p: number,
   params: StationParams,
 ): number {
-  // Linear model around pRef:
-  // f = 1 - alpha*(p - pRef), clamped.
-  const raw = 1 - params.priceSensitivity * (p - params.pRef);
-  return clamp(raw, params.minDemandFactor, params.maxDemandFactor);
+  // Constant-elasticity demand model:
+  // lambda(p) = lambda0 * (p / pRef)^(-epsilon)
+  return Math.pow(p / params.pRef, -params.priceElasticity);
 }
 
 export function demandFactorFromTemp(
@@ -29,9 +28,11 @@ export function arrivalsRatePerHour(
   p: number,
   params: StationParams,
 ): number {
-  const base = params.baseArrivalsPerHourByMonth[month] ?? 0;
+  const base = params.baseArrivalsPerHourByMonth[month];
   const fPrice = demandFactorFromPrice(p, params);
   const fTemp = demandFactorFromTemp(month, params);
+  // Positivity is guaranteed by validated params: base > 0, p > 0, pRef > 0,
+  // priceElasticity > 0, and positive temperature factor.
   return base * fPrice * fTemp;
 }
 
@@ -61,17 +62,4 @@ export function serviceTimeHoursFromEnergy(
 ): number {
   // time = energy / power
   return energyKwh / Math.max(1e-6, params.powerKw);
-}
-
-export function priceSkipProbability(p: number, params: StationParams): number {
-  // Optional extra: even before queue, some customers skip due to price.
-  // We keep it simple and consistent with fPrice:
-  // If demandFactor already models price, this can be small. We'll set a mild curve:
-  // P(skip) grows when p > pRef.
-  const delta = p - params.pRef;
-  const k = 6.0; // steepness
-  const x = k * delta; // assumes prices are in ~0.4..0.9
-  const sigmoid = 1 / (1 + Math.exp(-x));
-  // baseline 2% + up to 20%
-  return clamp(0.02 + 0.2 * sigmoid, 0.0, 0.35);
 }
