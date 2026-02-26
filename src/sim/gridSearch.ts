@@ -129,10 +129,7 @@ function validateStationParams(params: StationParams): void {
   if (!Number.isFinite(params.pRef) || params.pRef <= 0) {
     throw new Error("pRef must be strictly positive.");
   }
-  if (
-    !Number.isFinite(params.priceElasticity) ||
-    params.priceElasticity <= 0
-  ) {
+  if (!Number.isFinite(params.priceElasticity) || params.priceElasticity <= 0) {
     throw new Error("priceElasticity must be strictly positive.");
   }
   if (params.baseArrivalsPerHourByMonth.length < 12) {
@@ -147,13 +144,20 @@ function validateStationParams(params: StationParams): void {
   if (!Number.isFinite(params.qMax) || params.qMax < 0) {
     throw new Error("qMax must be >= 0.");
   }
-  if (!Number.isFinite(params.openHours) || params.openHours < 1 || params.openHours > 24) {
+  if (
+    !Number.isFinite(params.openHours) ||
+    params.openHours < 1 ||
+    params.openHours > 24
+  ) {
     throw new Error("openHours must be in [1, 24].");
   }
   if (!Number.isFinite(params.gridCostPerKwh) || params.gridCostPerKwh < 0) {
     throw new Error("gridCostPerKwh must be >= 0.");
   }
-  if (!Number.isFinite(params.fixedCostPerYear) || params.fixedCostPerYear < 0) {
+  if (
+    !Number.isFinite(params.fixedCostPerYear) ||
+    params.fixedCostPerYear < 0
+  ) {
     throw new Error("fixedCostPerYear must be >= 0.");
   }
   if (
@@ -251,10 +255,9 @@ export function gridSearch(
       // Mean KPIs across runs
       const meanKpi = scaleKpi(sum, 1 / mcRuns);
       const meanDropped = meanKpi.droppedQueueFull + meanKpi.droppedWaitTol;
-      const dropRate = meanKpi.arrivals > 0 ? meanDropped / meanKpi.arrivals : 0;
+      const dropRate =
+        meanKpi.arrivals > 0 ? meanDropped / meanKpi.arrivals : 0;
 
-      // For waits & utilization, averaging across runs is OK for display,
-      // though you could later compute pooled percentiles from all waits if you store them.
       const point: GridPointResult = {
         N,
         p,

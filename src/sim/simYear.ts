@@ -26,7 +26,6 @@ export function simulateYear(
   const HOURS_PER_DAY = params.openHours;
   const DAYS_PER_YEAR = 365;
 
-  // We simulate "operating hours" only. Each day has HOURS_PER_DAY hours.
   const totalHours = DAYS_PER_YEAR * HOURS_PER_DAY;
 
   // Stalls
@@ -50,7 +49,6 @@ export function simulateYear(
   // For utilization: sum busy time across stalls / (N * totalHours)
   let totalBusyHours = 0;
 
-  // Helper: month index by day-of-year (simple mapping using typical month lengths)
   const monthByDay = buildMonthByDay();
 
   const onServe = (busyHours: number, eKwh: number) => {

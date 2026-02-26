@@ -1,7 +1,6 @@
 export class RNG {
   private state: number;
 
-  // Mulberry32 - fast, decent for simulation
   constructor(seed: number) {
     // force to uint32
     this.state = seed >>> 0;
@@ -14,17 +13,14 @@ export class RNG {
     return (t ^ (t >>> 14)) >>> 0;
   }
 
-  // Uniform [0,1)
   uniform(): number {
     return this.nextU32() / 4294967296; // 2^32
   }
 
-  // Uniform [a,b)
   uniformRange(a: number, b: number): number {
     return a + (b - a) * this.uniform();
   }
 
-  // Standard normal via Box-Muller
   normal01(): number {
     let u = 0,
       v = 0;
@@ -45,7 +41,7 @@ export class RNG {
     return -Math.log(u) / lambda;
   }
 
-  // Poisson via Knuth (ok for small lambda; we’ll use per-hour small-ish)
+  // Poisson via Knuth (ok for small lambda; we’ll use per-hour smallish)
   poisson(lambda: number): number {
     if (lambda <= 0) return 0;
     const L = Math.exp(-lambda);

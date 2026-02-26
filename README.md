@@ -70,6 +70,24 @@ The application provides:
 
 ---
 
+## Prerequisites
+
+To run the project locally, you need:
+
+- Node.js (recommended: version 18 or higher)
+- npm (comes with Node.js)
+
+You can download Node.js from:
+
+https://nodejs.org/
+
+After installation, verify it in your terminal:
+
+```bash
+node -v
+npm -v
+```
+
 ## Running the Project
 
 Install dependencies:

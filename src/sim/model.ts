@@ -1,5 +1,3 @@
-// src/sim/model.ts
-
 import { type StationParams, type MonthIndex } from "./types";
 import { RNG, clamp } from "./rng";
 
@@ -16,7 +14,7 @@ export function demandFactorFromTemp(
   month: MonthIndex,
   params: StationParams,
 ): number {
-  // If temperature below ref -> increase demand (e.g., batteries less efficient).
+  // If temperature below ref -> increase demand (batteries less efficient).
   // factor = 1 + tempSensitivity*(refTemp - temp)
   const temp = params.avgTempCByMonth[month];
   const raw = 1 + params.tempSensitivity * (params.refTempC - temp);
@@ -41,8 +39,6 @@ export function sampleEnergyKwh(
   params: StationParams,
   month: MonthIndex,
 ): number {
-  // Simple: normal + clamp (you can later switch to lognormal if desired).
-  // Optional seasonal bump: winter slightly higher kWh per session.
   const winterBoost = month === 11 || month === 0 || month === 1 ? 1.08 : 1.0;
   const x = rng.normal(params.energyKwhMean * winterBoost, params.energyKwhStd);
   return clamp(x, params.energyKwhMin, params.energyKwhMax);

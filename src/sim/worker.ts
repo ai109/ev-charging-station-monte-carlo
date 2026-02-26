@@ -1,9 +1,6 @@
-// src/sim/worker.ts
-
 import { gridSearch } from "./gridSearch";
 import { type WorkerRequest, type WorkerResponse } from "./types";
 
-// Vite Web Worker entry
 function errorMessage(err: unknown): string {
   if (err instanceof Error) return err.message;
   return String(err);

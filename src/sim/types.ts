@@ -12,7 +12,6 @@ export interface NGrid {
 }
 
 export interface StationParams {
-  // Station / service
   powerKw: number; // charging power per stall (kW)
   qMax: number; // max queue length (cars waiting)
   openHours: number; // hours per day station is "active" (e.g. 16 or 24)
