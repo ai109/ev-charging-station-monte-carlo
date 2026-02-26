@@ -4,6 +4,11 @@ import { gridSearch } from "./gridSearch";
 import { type WorkerRequest, type WorkerResponse } from "./types";
 
 // Vite Web Worker entry
+function errorMessage(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  return String(err);
+}
+
 self.onmessage = (ev: MessageEvent<WorkerRequest>) => {
   const msg = ev.data;
 
@@ -12,12 +17,18 @@ self.onmessage = (ev: MessageEvent<WorkerRequest>) => {
   try {
     const { params, config } = msg;
 
-    const total =
-      (config.nGrid.nMax - config.nGrid.nMin + 1) *
-      (Math.floor(
-        (config.pGrid.pMax - config.pGrid.pMin) / config.pGrid.pStep + 0.5,
-      ) +
-        1);
+    const nCount = Math.max(0, config.nGrid.nMax - config.nGrid.nMin + 1);
+    const pCount =
+      config.pGrid.pStep > 0
+        ? Math.max(
+            0,
+            Math.floor(
+              (config.pGrid.pMax - config.pGrid.pMin) / config.pGrid.pStep +
+                0.5,
+            ) + 1,
+          )
+        : 0;
+    const total = nCount * pCount;
 
     const postProgress = (completed: number) => {
       const resp: WorkerResponse = {
@@ -52,10 +63,10 @@ self.onmessage = (ev: MessageEvent<WorkerRequest>) => {
     };
 
     self.postMessage(done);
-  } catch (e: any) {
+  } catch (e: unknown) {
     const err: WorkerResponse = {
       type: "error",
-      error: e?.message ?? String(e),
+      error: errorMessage(e),
       progress: { stage: "error", completed: 0, total: 0, message: "Error" },
     };
     self.postMessage(err);

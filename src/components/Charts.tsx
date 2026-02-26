@@ -1,6 +1,10 @@
 import ReactECharts from "echarts-for-react";
 import type { GridPointResult } from "../sim/types";
 
+type HeatmapDatum = [number, number, number];
+type ScatterDatum = [number, number, number, number];
+type TooltipValueParam = { value?: unknown };
+
 function uniqSorted<T>(arr: T[], cmp: (a: T, b: T) => number): T[] {
   return Array.from(new Set(arr)).sort(cmp);
 }
@@ -13,7 +17,7 @@ function makeHeatmapOption(args: {
   title: string;
   Ns: number[];
   Ps: number[];
-  data: [number, number, number][];
+  data: HeatmapDatum[];
   valueFormatter: (v: number) => string;
   min: number;
   max: number;
@@ -27,10 +31,10 @@ function makeHeatmapOption(args: {
     tooltip: {
       trigger: "item",
       confine: true,
-      formatter: (p: any) => {
-        const xi = p.value[0];
-        const yi = p.value[1];
-        const val = p.value[2];
+      formatter: (p: TooltipValueParam) => {
+        const tuple = asHeatmapDatum(p.value);
+        if (!tuple) return "No data";
+        const [xi, yi, val] = tuple;
         return [
           `<div style="min-width:140px">`,
           `<div><b>N</b>: ${Ns[yi]}</div>`,
@@ -115,6 +119,14 @@ function paretoFront(points: ParetoPoint[]): ParetoPoint[] {
 }
 
 export function Charts({ results }: { results: GridPointResult[] }) {
+  if (results.length === 0) {
+    return (
+      <div className="rounded-xl border bg-white p-4 shadow-sm text-sm opacity-70">
+        No grid points were produced. Check your grid bounds and step values.
+      </div>
+    );
+  }
+
   const Ns = uniqSorted(
     results.map((r) => r.N),
     (a, b) => a - b,
@@ -129,8 +141,8 @@ export function Charts({ results }: { results: GridPointResult[] }) {
   const indexN = new Map<number, number>();
   Ns.forEach((n, i) => indexN.set(n, i));
 
-  const profitData: [number, number, number][] = [];
-  const dropData: [number, number, number][] = [];
+  const profitData: HeatmapDatum[] = [];
+  const dropData: HeatmapDatum[] = [];
 
   let minProfit = Infinity,
     maxProfit = -Infinity;
@@ -193,13 +205,10 @@ export function Charts({ results }: { results: GridPointResult[] }) {
     tooltip: {
       trigger: "item",
       confine: true,
-      formatter: (p: any) => {
-        const [drop, profit, N, price] = p.value as [
-          number,
-          number,
-          number,
-          number,
-        ];
+      formatter: (p: TooltipValueParam) => {
+        const tuple = asScatterDatum(p.value);
+        if (!tuple) return "No data";
+        const [drop, profit, N, price] = tuple;
         return [
           `<div style="min-width:160px">`,
           `<div><b>Profit</b>: ${formatEuro(profit)}</div>`,
@@ -252,24 +261,46 @@ export function Charts({ results }: { results: GridPointResult[] }) {
     <div className="space-y-8">
       <div className="rounded-xl border bg-white p-4 shadow-sm">
         <ReactECharts
-          option={profitOption as any}
+          option={profitOption}
           style={{ height: 520, width: "100%" }}
         />
       </div>
 
       <div className="rounded-xl border bg-white p-4 shadow-sm">
         <ReactECharts
-          option={dropOption as any}
+          option={dropOption}
           style={{ height: 520, width: "100%" }}
         />
       </div>
 
       <div className="rounded-xl border bg-white p-4 shadow-sm">
         <ReactECharts
-          option={scatterOption as any}
+          option={scatterOption}
           style={{ height: 520, width: "100%" }}
         />
       </div>
     </div>
   );
+}
+
+function asHeatmapDatum(value: unknown): HeatmapDatum | null {
+  if (!Array.isArray(value) || value.length < 3) return null;
+  const [x, y, z] = value;
+  if (typeof x !== "number" || typeof y !== "number" || typeof z !== "number")
+    return null;
+  return [x, y, z];
+}
+
+function asScatterDatum(value: unknown): ScatterDatum | null {
+  if (!Array.isArray(value) || value.length < 4) return null;
+  const [drop, profit, N, p] = value;
+  if (
+    typeof drop !== "number" ||
+    typeof profit !== "number" ||
+    typeof N !== "number" ||
+    typeof p !== "number"
+  ) {
+    return null;
+  }
+  return [drop, profit, N, p];
 }

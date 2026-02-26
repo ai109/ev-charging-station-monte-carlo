@@ -1,13 +1,46 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type {
   GridPointResult,
   StationParams,
   WorkerResponse,
 } from "./sim/types";
 import { Controls, type ControlsValue } from "./components/Controls";
+import { AdvancedParams } from "./components/AdvancedParams";
 import { KpiCards } from "./components/KpiCards";
 import { Charts } from "./components/Charts";
 import { ReportPanel } from "./components/ReportPanel";
+
+function createDefaultStationParams(): StationParams {
+  return {
+    powerKw: 100,
+    qMax: 8,
+    openHours: 24,
+
+    gridCostPerKwh: 0.2,
+    fixedCostPerStallPerYear: 4500,
+    fixedCostPerYear: 12000,
+
+    baseArrivalsPerHourByMonth: [
+      1.2, 1.1, 1.0, 1.1, 1.3, 1.6, 1.8, 1.7, 1.4, 1.2, 1.1, 1.2,
+    ],
+    avgTempCByMonth: [-1, 1, 5, 10, 15, 20, 23, 22, 17, 11, 5, 1],
+    tempSensitivity: 0.02,
+    refTempC: 12,
+
+    pRef: 0.6,
+    priceElasticity: 2.1,
+
+    energyKwhMean: 28,
+    energyKwhStd: 10,
+    energyKwhMin: 8,
+    energyKwhMax: 70,
+
+    waitTolMeanMin: 12,
+    waitTolStdMin: 6,
+    waitTolMin: 2,
+    waitTolMax: 35,
+  };
+}
 
 export default function App() {
   const workerRef = useRef<Worker | null>(null);
@@ -29,39 +62,8 @@ export default function App() {
     maxP95WaitMin: 12,
   });
 
-  const params: StationParams = useMemo(
-    () => ({
-      powerKw: 100,
-      qMax: 8,
-      openHours: 24,
-
-      gridCostPerKwh: 0.2,
-      fixedCostPerStallPerYear: 4500,
-      fixedCostPerYear: 12000,
-
-      baseArrivalsPerHourByMonth: [
-        1.2, 1.1, 1.0, 1.1, 1.3, 1.6, 1.8, 1.7, 1.4, 1.2, 1.1, 1.2,
-      ],
-      avgTempCByMonth: [-1, 1, 5, 10, 15, 20, 23, 22, 17, 11, 5, 1],
-      tempSensitivity: 0.02,
-      refTempC: 12,
-
-      pRef: 0.6,
-      priceSensitivity: 0.85,
-      minDemandFactor: 0.55,
-      maxDemandFactor: 1.15,
-
-      energyKwhMean: 28,
-      energyKwhStd: 10,
-      energyKwhMin: 8,
-      energyKwhMax: 70,
-
-      waitTolMeanMin: 12,
-      waitTolStdMin: 6,
-      waitTolMin: 2,
-      waitTolMax: 35,
-    }),
-    [],
+  const [params, setParams] = useState<StationParams>(() =>
+    createDefaultStationParams(),
   );
 
   useEffect(() => {
@@ -98,6 +100,11 @@ export default function App() {
   }, []);
 
   const run = () => {
+    const nMin = Math.min(controls.nGrid.nMin, controls.nGrid.nMax);
+    const nMax = Math.max(controls.nGrid.nMin, controls.nGrid.nMax);
+    const pMin = Math.min(controls.pGrid.pMin, controls.pGrid.pMax);
+    const pMax = Math.max(controls.pGrid.pMin, controls.pGrid.pMax);
+
     setError(null);
     setResults(null);
     setBest(null);
@@ -108,8 +115,8 @@ export default function App() {
       type: "run-grid",
       params,
       config: {
-        nGrid: controls.nGrid,
-        pGrid: controls.pGrid,
+        nGrid: { nMin, nMax },
+        pGrid: { pMin, pMax, pStep: controls.pGrid.pStep },
         mcRuns: controls.mcRuns,
         seed: controls.seed,
         maxDropRate: controls.maxDropRateEnabled
@@ -141,6 +148,12 @@ export default function App() {
           onChange={setControls}
           onRun={run}
           running={running}
+        />
+
+        <AdvancedParams
+          value={params}
+          onChange={setParams}
+          onReset={() => setParams(createDefaultStationParams())}
         />
 
         {error && (

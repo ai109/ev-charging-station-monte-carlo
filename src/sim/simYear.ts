@@ -2,7 +2,6 @@ import { RNG, mean, percentile } from "./rng";
 import { type StationParams, type SimRunKPIs, type MonthIndex } from "./types";
 import {
   arrivalsRatePerHour,
-  priceSkipProbability,
   sampleEnergyKwh,
   sampleWaitToleranceMin,
   serviceTimeHoursFromEnergy,
@@ -10,6 +9,12 @@ import {
 
 type Stall = {
   busyUntilHour: number; // absolute hour in year when stall becomes free
+};
+
+type QueuedCar = {
+  arrivalHour: number;
+  waitTolMin: number;
+  energyKwh: number;
 };
 
 export function simulateYear(
@@ -29,12 +34,7 @@ export function simulateYear(
     busyUntilHour: 0,
   }));
 
-  // Queue holds "ready time" (arrival hour) and personal wait tolerance
-  type QueuedCar = {
-    arrivalHour: number;
-    waitTolMin: number;
-    energyKwh: number;
-  };
+  // Queue holds arrival time in operating-hour coordinates and wait tolerance.
   const queue: QueuedCar[] = [];
 
   // Stats accumulators
@@ -44,7 +44,6 @@ export function simulateYear(
   let served = 0;
   let droppedQueueFull = 0;
   let droppedWaitTol = 0;
-  let droppedPrice = 0;
 
   const waitTimesMin: number[] = [];
 
@@ -54,97 +53,72 @@ export function simulateYear(
   // Helper: month index by day-of-year (simple mapping using typical month lengths)
   const monthByDay = buildMonthByDay();
 
-  // For each day, per hour: generate arrivals (Poisson), process queue and finishing
+  const onServe = (busyHours: number, eKwh: number) => {
+    totalBusyHours += busyHours;
+    energySoldKwh += eKwh;
+    revenue += eKwh * p;
+    served++;
+  };
+
+  // For each operating hour: sample arrivals, then process queue in continuous time.
   for (let day = 0; day < DAYS_PER_YEAR; day++) {
     const month = monthByDay[day] as MonthIndex;
 
     for (let h = 0; h < HOURS_PER_DAY; h++) {
-      const tHour = day * HOURS_PER_DAY + h; // absolute hour in year (operating hours)
+      const hourStart = day * HOURS_PER_DAY + h;
+      const hourEnd = hourStart + 1;
 
-      // 1) Some queued cars may have exceeded wait tolerance -> drop
-      // We treat "expected wait" as current time - arrival time (already waited).
-      // If they've waited beyond tolerance, they leave.
-      while (queue.length > 0) {
-        const q0 = queue[0];
-        const waitedMin = (tHour - q0.arrivalHour) * 60;
-        if (waitedMin > q0.waitTolMin) {
-          queue.shift();
-          droppedWaitTol++;
-        } else {
-          break;
-        }
-      }
-
-      // 2) Assign free stalls to queue first (FCFS)
-      assignFromQueueToStalls(
-        queue,
-        stalls,
-        tHour,
-        params,
-        p,
-        waitTimesMin,
-        (busyHours, eKwh) => {
-          totalBusyHours += busyHours;
-          energySoldKwh += eKwh;
-          revenue += eKwh * p;
-          served++;
-        },
-      );
-
-      // 3) Generate new arrivals this hour with seasonality + price effect
+      // Generate Poisson arrivals in this hour and place each at a random
+      // intra-hour timestamp to avoid one-session-per-hour artifacts.
       const lambda = arrivalsRatePerHour(month, p, params);
       const kArrivals = rng.poisson(lambda);
+      const arrivalTimes: number[] = Array.from(
+        { length: kArrivals },
+        () => hourStart + rng.uniform(),
+      ).sort((a, b) => a - b);
 
-      for (let i = 0; i < kArrivals; i++) {
+      for (const tArrival of arrivalTimes) {
+        droppedWaitTol += processQueueUntil(
+          queue,
+          stalls,
+          tArrival,
+          params,
+          waitTimesMin,
+          onServe,
+        );
+
         arrivals++;
-
-        // Some skip immediately due to price perception
-        const skipProb = priceSkipProbability(p, params);
-        if (rng.uniform() < skipProb) {
-          droppedPrice++;
-          continue;
-        }
 
         const energyKwh = sampleEnergyKwh(rng, params, month);
         const waitTolMin = sampleWaitToleranceMin(rng, params);
 
         // Try to start service immediately if any stall is free
-        const freeIdx = findFreeStallIndex(stalls, tHour);
+        const freeIdx = findFreeStallIndex(stalls, tArrival);
         if (freeIdx !== -1) {
           const serviceH = serviceTimeHoursFromEnergy(energyKwh, params);
-          stalls[freeIdx].busyUntilHour = tHour + serviceH;
-
-          totalBusyHours += serviceH;
-          energySoldKwh += energyKwh;
-          revenue += energyKwh * p;
-          served++;
+          stalls[freeIdx].busyUntilHour = tArrival + serviceH;
+          onServe(serviceH, energyKwh);
 
           waitTimesMin.push(0);
         } else {
           // No free stall -> join queue if space
           if (queue.length < params.qMax) {
-            queue.push({ arrivalHour: tHour, waitTolMin, energyKwh });
+            queue.push({ arrivalHour: tArrival, waitTolMin, energyKwh });
           } else {
             droppedQueueFull++;
           }
         }
       }
 
-      // 4) After arrivals, again assign if stalls freed within same hour tick
-      // (rare with hour ticks, but helps when service times < 1h)
-      assignFromQueueToStalls(
+      // Process queue through end of hour so cars can start when stalls free
+      // even if no arrival happens at that exact moment.
+      droppedWaitTol += processQueueUntil(
         queue,
         stalls,
-        tHour,
+        hourEnd,
         params,
-        p,
         waitTimesMin,
-        (busyHours, eKwh) => {
-          totalBusyHours += busyHours;
-          energySoldKwh += eKwh;
-          revenue += eKwh * p;
-          served++;
-        },
+        onServe,
       );
     }
   }
@@ -169,7 +143,6 @@ export function simulateYear(
     served,
     droppedQueueFull,
     droppedWaitTol,
-    droppedPrice,
 
     avgWaitMin,
     p95WaitMin,
@@ -177,15 +150,47 @@ export function simulateYear(
   };
 }
 
-function assignFromQueueToStalls(
-  queue: { arrivalHour: number; waitTolMin: number; energyKwh: number }[],
-  stalls: { busyUntilHour: number }[],
-  tHour: number,
+function processQueueUntil(
+  queue: QueuedCar[],
+  stalls: Stall[],
+  targetHour: number,
   params: StationParams,
-  p: number,
   waitTimesMin: number[],
   onServe: (busyHours: number, energyKwh: number) => void,
-) {
+): number {
+  let droppedWaitTol = 0;
+
+  while (queue.length > 0) {
+    const nextFreeHour = findEarliestStallFreeHour(stalls);
+    if (nextFreeHour > targetHour) break;
+
+    droppedWaitTol += dropExpiredFromQueue(queue, nextFreeHour);
+    if (queue.length === 0) continue;
+
+    droppedWaitTol += assignFromQueueToFreeStalls(
+      queue,
+      stalls,
+      nextFreeHour,
+      params,
+      waitTimesMin,
+      onServe,
+    );
+  }
+
+  droppedWaitTol += dropExpiredFromQueue(queue, targetHour);
+  return droppedWaitTol;
+}
+
+function assignFromQueueToFreeStalls(
+  queue: QueuedCar[],
+  stalls: Stall[],
+  tHour: number,
+  params: StationParams,
+  waitTimesMin: number[],
+  onServe: (busyHours: number, energyKwh: number) => void,
+): number {
+  let droppedWaitTol = 0;
+
   while (queue.length > 0) {
     const freeIdx = findFreeStallIndex(stalls, tHour);
     if (freeIdx === -1) break;
@@ -193,18 +198,32 @@ function assignFromQueueToStalls(
     const car = queue.shift()!;
     const waitedMin = (tHour - car.arrivalHour) * 60;
 
-    // if they already exceeded tolerance, they leave (should be mostly handled earlier)
     if (waitedMin > car.waitTolMin) {
-      // droppedWaitTol counted elsewhere; keep consistent by ignoring here
+      droppedWaitTol++;
       continue;
     }
 
     const serviceH = serviceTimeHoursFromEnergy(car.energyKwh, params);
     stalls[freeIdx].busyUntilHour = tHour + serviceH;
-
     waitTimesMin.push(waitedMin);
     onServe(serviceH, car.energyKwh);
   }
+
+  return droppedWaitTol;
+}
+
+function dropExpiredFromQueue(queue: QueuedCar[], tHour: number): number {
+  let dropped = 0;
+
+  for (let i = queue.length - 1; i >= 0; i--) {
+    const waitedMin = (tHour - queue[i].arrivalHour) * 60;
+    if (waitedMin > queue[i].waitTolMin) {
+      queue.splice(i, 1);
+      dropped++;
+    }
+  }
+
+  return dropped;
 }
 
 function findFreeStallIndex(
@@ -215,6 +234,14 @@ function findFreeStallIndex(
     if (stalls[i].busyUntilHour <= tHour) return i;
   }
   return -1;
+}
+
+function findEarliestStallFreeHour(stalls: Stall[]): number {
+  let minHour = Infinity;
+  for (const stall of stalls) {
+    if (stall.busyUntilHour < minHour) minHour = stall.busyUntilHour;
+  }
+  return minHour;
 }
 
 function buildMonthByDay(): number[] {

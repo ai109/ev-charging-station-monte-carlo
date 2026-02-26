@@ -81,13 +81,21 @@ export function ReportPanel({
       `- Grid cost: ${params.gridCostPerKwh.toFixed(2)} €/kWh`,
       `- Fixed cost/year: ${Math.round(params.fixedCostPerYear).toLocaleString()} €`,
       `- Fixed cost per stall/year: ${Math.round(params.fixedCostPerStallPerYear).toLocaleString()} €`,
+      `- Energy demand (kWh/session): mean=${params.energyKwhMean.toFixed(1)}, std=${params.energyKwhStd.toFixed(1)}, min=${params.energyKwhMin.toFixed(1)}, max=${params.energyKwhMax.toFixed(1)}`,
+      `- Wait tolerance (minutes): mean=${params.waitTolMeanMin.toFixed(1)}, std=${params.waitTolStdMin.toFixed(1)}, min=${params.waitTolMin.toFixed(1)}, max=${params.waitTolMax.toFixed(1)}`,
       ``,
       `Seasonality: base arrivals/h by month (Jan..Dec):`,
       `- ${params.baseArrivalsPerHourByMonth.map((x) => x.toFixed(2)).join(", ")}`,
       `Temperature (avg °C Jan..Dec):`,
       `- ${params.avgTempCByMonth.map((x) => x.toFixed(1)).join(", ")}`,
       ``,
-      `Price-demand: pRef=${params.pRef.toFixed(2)}, sensitivity=${params.priceSensitivity.toFixed(2)}`,
+      `Price-demand: pRef=${params.pRef.toFixed(2)}, elasticity=${params.priceElasticity.toFixed(2)}`,
+      `Temperature model: refTemp=${params.refTempC.toFixed(1)} °C, sensitivity=${params.tempSensitivity.toFixed(3)} per °C`,
+      ``,
+      `Simulation notes:`,
+      `- Continuous-time arrivals are sampled within each operating hour.`,
+      `- Queue abandonment is evaluated for all waiting vehicles (not just queue head).`,
+      `- Price effect is modeled once in the arrival-rate demand factor.`,
     ];
 
     return lines.join("\n");
