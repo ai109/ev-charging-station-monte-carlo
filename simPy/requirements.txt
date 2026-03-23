@@ -1,0 +1,5 @@
+# SimPy EV Charging Station Simulation
+# Install dependencies with: pip install -r requirements.txt
+
+simpy>=4.0.0
+numpy>=1.20.0
