@@ -1,5 +1,5 @@
 import { gridSearch } from "./gridSearch";
-import { type WorkerRequest, type WorkerResponse } from "./types";
+import { type WorkerRequest, type WorkerResponse, type YearProjection, type SensitivityResult } from "./types";
 
 function errorMessage(err: unknown): string {
   if (err instanceof Error) return err.message;
@@ -42,15 +42,17 @@ self.onmessage = (ev: MessageEvent<WorkerRequest>) => {
 
     postProgress(0);
 
-    const { results, best } = gridSearch(params, config, (completed) => {
+    const { results, best, projections, sensitivity } = gridSearch(params, config, (completed) => {
       // throttle progress a bit to reduce message spam
       if (completed % 3 === 0 || completed === total) postProgress(completed);
     });
 
-    const done: WorkerResponse = {
+    const done: WorkerResponse & { projections?: YearProjection[]; sensitivity?: SensitivityResult[] } = {
       type: "result",
       results,
       best,
+      projections,
+      sensitivity,
       progress: {
         stage: "done",
         completed: total,

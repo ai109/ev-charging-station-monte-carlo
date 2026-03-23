@@ -3,12 +3,16 @@ import type {
   GridPointResult,
   StationParams,
   WorkerResponse,
+  YearProjection,
+  SensitivityResult,
 } from "./sim/types";
 import { Controls, type ControlsValue } from "./components/Controls";
-import { AdvancedParams } from "./components/AdvancedParams";
+import { AdvancedParams, DEFAULT_VEHICLE_CLASSES } from "./components/AdvancedParams";
 import { KpiCards } from "./components/KpiCards";
 import { Charts } from "./components/Charts";
 import { ReportPanel } from "./components/ReportPanel";
+import { ScenarioComparison } from "./components/ScenarioComparison";
+import { WhatIfAnalysis } from "./components/WhatIfAnalysis";
 
 function createDefaultStationParams(): StationParams {
   return {
@@ -30,15 +34,27 @@ function createDefaultStationParams(): StationParams {
     pRef: 0.6,
     priceElasticity: 2.1,
 
-    energyKwhMean: 28,
-    energyKwhStd: 10,
-    energyKwhMin: 8,
-    energyKwhMax: 70,
+    vehicleClasses: DEFAULT_VEHICLE_CLASSES,
 
     waitTolMeanMin: 12,
     waitTolStdMin: 6,
     waitTolMin: 2,
     waitTolMax: 35,
+
+    touSchedule: [],
+    demandCharge: {
+      enabled: false,
+      ratePerKw: 10,
+      billingDemandPercent: 0.8,
+    },
+    dynamicPricing: {
+      enabled: false,
+      basePrice: 0.3,
+      surgeMultiplier: 1.5,
+      thresholdUtilization: 0.8,
+      peakHours: [8, 9, 10, 17, 18, 19],
+    },
+    annualDemandGrowth: 0,
   };
 }
 
@@ -49,6 +65,8 @@ export default function App() {
   const [progressText, setProgressText] = useState<string>("");
   const [results, setResults] = useState<GridPointResult[] | null>(null);
   const [best, setBest] = useState<GridPointResult | null>(null);
+  const [projections, setProjections] = useState<YearProjection[] | undefined>();
+  const [sensitivity, setSensitivity] = useState<SensitivityResult[] | undefined>();
   const [error, setError] = useState<string | null>(null);
 
   const [controls, setControls] = useState<ControlsValue>({
@@ -60,6 +78,11 @@ export default function App() {
     maxDropRate: 0.12,
     maxP95Enabled: true,
     maxP95WaitMin: 12,
+    enableSensitivityAnalysis: false,
+    sensitivityRange: 0.2,
+    enableMultiYearProjection: false,
+    projectionYears: 5,
+    discountRate: 0.08,
   });
 
   const [params, setParams] = useState<StationParams>(() =>
@@ -83,6 +106,9 @@ export default function App() {
       if (msg.type === "result") {
         setResults(msg.results ?? null);
         setBest(msg.best ?? null);
+        const resultMsg = msg as WorkerResponse & { projections?: YearProjection[]; sensitivity?: SensitivityResult[] };
+        setProjections(resultMsg.projections);
+        setSensitivity(resultMsg.sensitivity);
         setRunning(false);
         setProgressText("Done");
       }
@@ -108,6 +134,8 @@ export default function App() {
     setError(null);
     setResults(null);
     setBest(null);
+    setProjections(undefined);
+    setSensitivity(undefined);
     setRunning(true);
     setProgressText("Starting...");
 
@@ -125,6 +153,11 @@ export default function App() {
         maxP95WaitMin: controls.maxP95Enabled
           ? controls.maxP95WaitMin
           : undefined,
+        enableSensitivityAnalysis: controls.enableSensitivityAnalysis,
+        sensitivityRange: controls.sensitivityRange,
+        enableMultiYearProjection: controls.enableMultiYearProjection,
+        projectionYears: controls.projectionYears,
+        discountRate: controls.discountRate,
       },
     });
   };
@@ -137,7 +170,7 @@ export default function App() {
             <h1 className="text-2xl font-bold">EV Charging Monte Carlo</h1>
             <div className="text-sm opacity-70">
               Grid search over (N, price) • Seasonality + stochastic arrivals +
-              queueing
+              queueing + dynamic pricing + renewable energy
             </div>
           </div>
           <div className="text-sm opacity-70">{progressText}</div>
@@ -161,6 +194,14 @@ export default function App() {
         )}
 
         <KpiCards best={best} />
+
+        {projections && projections.length > 0 && (
+          <ScenarioComparison projections={projections} />
+        )}
+
+        {sensitivity && sensitivity.length > 0 && (
+          <WhatIfAnalysis sensitivity={sensitivity} />
+        )}
 
         <ReportPanel params={params} best={best} results={results} />
 

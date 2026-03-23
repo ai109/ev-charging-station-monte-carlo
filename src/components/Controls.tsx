@@ -10,6 +10,11 @@ export type ControlsValue = {
   maxDropRate: number;
   maxP95Enabled: boolean;
   maxP95WaitMin: number;
+  enableSensitivityAnalysis: boolean;
+  sensitivityRange: number;
+  enableMultiYearProjection: boolean;
+  projectionYears: number;
+  discountRate: number;
 };
 
 export function Controls({
@@ -155,6 +160,50 @@ export function Controls({
                 value={value.maxP95WaitMin}
                 disabled={!value.maxP95Enabled}
                 onChange={(x) => set({ maxP95WaitMin: clampNum(x, 0, 240) })}
+              />
+            </div>
+          </div>
+        </Field>
+
+        {/* Analysis Options */}
+        <Field title="Analysis Options">
+          <div className="space-y-3">
+            <ToggleRow
+              label="Enable sensitivity analysis"
+              checked={value.enableSensitivityAnalysis}
+              onChange={(c) => set({ enableSensitivityAnalysis: c })}
+            />
+            <div className="pl-6">
+              <LabeledInput
+                label="Sensitivity range (±%)"
+                type="number"
+                step="0.05"
+                value={value.sensitivityRange}
+                disabled={!value.enableSensitivityAnalysis}
+                onChange={(x) => set({ sensitivityRange: clampNum(x, 0.05, 0.5) })}
+              />
+            </div>
+
+            <ToggleRow
+              label="Enable multi-year projection"
+              checked={value.enableMultiYearProjection}
+              onChange={(c) => set({ enableMultiYearProjection: c })}
+            />
+            <div className="pl-6">
+              <LabeledInput
+                label="Projection years"
+                type="number"
+                value={value.projectionYears}
+                disabled={!value.enableMultiYearProjection}
+                onChange={(x) => set({ projectionYears: clampInt(x, 2, 20) })}
+              />
+              <LabeledInput
+                label="Discount rate (e.g. 0.08 = 8%)"
+                type="number"
+                step="0.01"
+                value={value.discountRate}
+                disabled={!value.enableMultiYearProjection}
+                onChange={(x) => set({ discountRate: clampNum(x, 0, 0.3) })}
               />
             </div>
           </div>
